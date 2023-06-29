@@ -148,5 +148,8 @@ class CoingeckoClient(BaseHTTPClient):
     def get_metis_usd_price(self) -> float:
         return self.get_price("metis-token")
 
+    def get_btc_usd_price(self) -> float:
+        return self.get_price("bitcoin")
+
     def get_mtr_usd_price(self) -> float:
         return self.get_price("meter-stable")
