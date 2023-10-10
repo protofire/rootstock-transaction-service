@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: '1'
+  labels:
+    app: rootstock-transaction-service
+  name: rootstock-transaction-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rootstock-transaction-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: rootstock-transaction-service
+    spec:
+      containers:
+        - image: sovryn/safe-config
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          name: web
+          resources: {}
+          tty: true
+          volumeMounts:
+            - mountPath: /nginx
+              name: nginx-shared
+        - image: nginx:1.20-alpine
+          name: nginx
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          ports:
+            - containerPort: 80
+          resources: {}
+          volumeMounts:
+            - name: nginxconf
+              mountPath: /etc/nginx/templates
+            - mountPath: /nginx
+              name: nginx-shared
+      restartPolicy: Always
+      volumes:
+        - name: nginx-shared
+          emptyDir: {}
+        - name: nginxconf
+          secret:
+            secretName: rootstock-transaction-service-nginx
+      imagePullSecrets:
+        - name: regcred
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rootstock-transaction-service
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-east-2:768438872063:certificate/9fa02b26-0ee5-4301-bdd6-8474344885ff
+spec:
+  selector:
+    app: rootstock-transaction-service
+  ports:
+    - port: 443
+      targetPort: 80
+  type: LoadBalancer
+---
