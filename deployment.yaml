@@ -26,6 +26,68 @@ spec:
               name: rootstock-transaction-service
           - secretRef:
               name: rootstock-transaction-service-secret
+          ports:
+            - containerPort: 5555
+          env:
+          - name: WORKER_QUEUES
+            value: "default,indexing"
+          - name:  RUN_MIGRATION
+            value: "1"
+          command: ["docker/web/celery/flower/run.sh"]
+          name: flower
+          resources: {}
+          tty: true
+        - image: sovryn/rootstock-transaction-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          env:
+          - name: WORKER_QUEUES
+            value: "contracts,tokens"
+          command: ["docker/web/celery/worker/run.sh"]
+          name: contracts-tokens-worker
+          resources: {}
+          tty: true
+        - image: sovryn/rootstock-transaction-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          env:
+          - name: WORKER_QUEUES
+            value: "notifications,webhooks"
+          command: ["docker/web/celery/worker/run.sh"]
+          name: notifications-webhooks-worker
+          resources: {}
+          tty: true
+        - image: sovryn/rootstock-transaction-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          env:
+          - name: WORKER_QUEUES
+            value: "default,indexing"
+          - name:  RUN_MIGRATION
+            value: "1"
+          command: ["docker/web/celery/worker/run.sh"]
+          name: indexer-worker
+          resources: {}
+          tty: true
+        - image: sovryn/rootstock-transaction-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
           name: web
           resources: {}
           tty: true
