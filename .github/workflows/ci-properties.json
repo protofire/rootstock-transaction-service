@@ -14,6 +14,7 @@
     "ETH_L2_NETWORK": "1",
     "ETH_INTERNAL_NO_FILTER": "1",
     "DJANGO_SU_NAME": "sovryn",
-    "DJANGO_SU_EMAIL": "sovryn@sovryn.app"
+    "DJANGO_SU_EMAIL": "sovryn@sovryn.app",
+    "DJANGO_SETTINGS_MODULE": "config.settings.productddion"
   }
 }
