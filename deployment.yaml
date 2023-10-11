@@ -36,7 +36,6 @@ spec:
           command: ["docker/web/celery/flower/run.sh"]
           name: flower
           resources: {}
-          tty: true
         - image: sovryn/rootstock-transaction-service
           imagePullPolicy: Always
           envFrom:
@@ -50,7 +49,6 @@ spec:
           command: ["docker/web/celery/worker/run.sh"]
           name: contracts-tokens-worker
           resources: {}
-          tty: true
         - image: sovryn/rootstock-transaction-service
           imagePullPolicy: Always
           envFrom:
@@ -64,7 +62,6 @@ spec:
           command: ["docker/web/celery/worker/run.sh"]
           name: notifications-webhooks-worker
           resources: {}
-          tty: true
         - image: sovryn/rootstock-transaction-service
           imagePullPolicy: Always
           envFrom:
@@ -80,7 +77,6 @@ spec:
           command: ["docker/web/celery/worker/run.sh"]
           name: indexer-worker
           resources: {}
-          tty: true
         - image: sovryn/rootstock-transaction-service
           imagePullPolicy: Always
           envFrom:
@@ -90,10 +86,10 @@ spec:
               name: rootstock-transaction-service-secret
           name: web
           resources: {}
-          tty: true
           volumeMounts:
             - mountPath: /nginx
               name: nginx-shared
+          command: ["docker/web/run_web.sh"]
         - image: nginx:1.20-alpine
           name: nginx
           envFrom:
