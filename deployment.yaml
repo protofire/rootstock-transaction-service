@@ -31,7 +31,7 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "default,indexing"
-          - name:  RUN_MIGRATION
+          - name:  RUN_MIGRATIONS
             value: "1"
           args: ["docker/web/celery/flower/run.sh"]
           name: flower
@@ -48,7 +48,7 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "default,indexing"
-          - name:  RUN_MIGRATION
+          - name:  RUN_MIGRATIONS
             value: "1"
           args: ["docker/web/celery/scheduler/run.sh"]
           name: scheduler
@@ -89,7 +89,7 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "default,indexing"
-          - name:  RUN_MIGRATION
+          - name:  RUN_MIGRATIONS
             value: "1"
           args: ["docker/web/celery/worker/run.sh"]
           name: indexer-worker
