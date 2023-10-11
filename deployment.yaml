@@ -33,8 +33,25 @@ spec:
             value: "default,indexing"
           - name:  RUN_MIGRATION
             value: "1"
-          command: ["docker/web/celery/flower/run.sh"]
+          args: ["docker/web/celery/flower/run.sh"]
           name: flower
+          resources: {}
+        - image: sovryn/rootstock-transaction-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-transaction-service
+          - secretRef:
+              name: rootstock-transaction-service-secret
+          ports:
+            - containerPort: 5555
+          env:
+          - name: WORKER_QUEUES
+            value: "default,indexing"
+          - name:  RUN_MIGRATION
+            value: "1"
+          args: ["docker/web/celery/scheduler/run.sh"]
+          name: scheduler
           resources: {}
         - image: sovryn/rootstock-transaction-service
           imagePullPolicy: Always
@@ -46,7 +63,7 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "contracts,tokens"
-          command: ["docker/web/celery/worker/run.sh"]
+          args: ["docker/web/celery/worker/run.sh"]
           name: contracts-tokens-worker
           resources: {}
         - image: sovryn/rootstock-transaction-service
@@ -59,7 +76,7 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "notifications,webhooks"
-          command: ["docker/web/celery/worker/run.sh"]
+          args: ["docker/web/celery/worker/run.sh"]
           name: notifications-webhooks-worker
           resources: {}
         - image: sovryn/rootstock-transaction-service
@@ -74,7 +91,7 @@ spec:
             value: "default,indexing"
           - name:  RUN_MIGRATION
             value: "1"
-          command: ["docker/web/celery/worker/run.sh"]
+          args: ["docker/web/celery/worker/run.sh"]
           name: indexer-worker
           resources: {}
         - image: sovryn/rootstock-transaction-service
@@ -89,7 +106,7 @@ spec:
           volumeMounts:
             - mountPath: /nginx
               name: nginx-shared
-          command: ["docker/web/run_web.sh"]
+          args: ["docker/web/run_web.sh"]
         - image: nginx:1.20-alpine
           name: nginx
           envFrom:
