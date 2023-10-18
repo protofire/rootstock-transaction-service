@@ -63,6 +63,8 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "contracts,tokens"
+          - name:  RUN_MIGRATIONS
+            value: "1"
           args: ["docker/web/celery/worker/run.sh"]
           name: contracts-tokens-worker
           resources: {}
@@ -76,6 +78,8 @@ spec:
           env:
           - name: WORKER_QUEUES
             value: "notifications,webhooks"
+          - name:  RUN_MIGRATIONS
+            value: "1"
           args: ["docker/web/celery/worker/run.sh"]
           name: notifications-webhooks-worker
           resources: {}
@@ -115,11 +119,12 @@ spec:
           - secretRef:
               name: rootstock-transaction-service-secret
           ports:
-            - containerPort: 80
+            - containerPort: 8000
           resources: {}
           volumeMounts:
             - name: nginxconf
-              mountPath: /etc/nginx/templates
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
             - mountPath: /nginx
               name: nginx-shared
       restartPolicy: Always
@@ -144,6 +149,6 @@ spec:
     app: rootstock-transaction-service
   ports:
     - port: 443
-      targetPort: 80
+      targetPort: 8000
   type: LoadBalancer
 ---
