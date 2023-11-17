@@ -29,9 +29,8 @@ export C_FORCE_ROOT=true
 
 echo "==> $(date +%H:%M:%S) ==> Running Celery worker with a max_memory_per_child of ${MAX_MEMORY_PER_CHILD} <=="
 # https://github.com/sumitasok/celery/issues/5#issuecomment-781717855
-exec celery -C -A config.celery_app worker \
+exec celery -C -A config.celery_app worker --task-events \
      --loglevel $log_level --pool=gevent \
-     -E \ 
      --concurrency=${TASK_CONCURRENCY} \
      --max-memory-per-child=${MAX_MEMORY_PER_CHILD} \
      --max-tasks-per-child=${MAX_TASKS_PER_CHILD} \
