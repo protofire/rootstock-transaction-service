@@ -153,3 +153,4 @@ class CoingeckoClient(BaseHTTPClient):
 
     def get_mtr_usd_price(self) -> float:
         return self.get_price("meter-stable")
+
