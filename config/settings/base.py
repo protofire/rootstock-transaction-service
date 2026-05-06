@@ -575,6 +575,12 @@ ETH_INTERNAL_TRACE_TXS_BATCH_SIZE = env.int(
 ETH_INTERNAL_TX_DECODED_PROCESS_BATCH = env.int(
     "ETH_INTERNAL_TX_DECODED_PROCESS_BATCH", default=500
 )  # Number of InternalTxDecoded to process together. Keep it low to be memory friendly
+ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD = env.int(
+    "ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD", default=5000
+)  # Defends against chains with broken trace error reporting (e.g. Rootstock) where
+# nested execTransaction calls that reverted at signature check are reported with
+# error=None. A genuine execTransaction always consumes well above this gas; a
+# silent revert consumes ~1500. Set to 0 to disable.
 
 # Event indexing configuration (L2 and ERC20/721)
 # ------------------------------------------------------------------------------

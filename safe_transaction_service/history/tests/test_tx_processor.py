@@ -24,6 +24,8 @@ from ..indexers.tx_processor import (
     SafeTxProcessorProvider,
 )
 from ..models import (
+    EthereumTxCallType,
+    InternalTx,
     InternalTxDecoded,
     ModuleTransaction,
     MultisigConfirmation,
@@ -646,3 +648,115 @@ class TestSafeTxProcessor(SafeTestCaseMixin, TestCase):
         safe_last_status_db = SafeLastStatus.objects.get()
         self.assertEqual(safe_last_status_db.address, safe_address)
         self.assertEqual(safe_last_status_db.nonce, 1)
+
+    def test_phantom_nested_exec_transaction_is_skipped(self):
+        """
+        Reproduce the Rootstock trace bug: an execTransaction recursively
+        delegate-calls back into the same Safe; the inner call reverts at
+        signature verification but the trace reports error=None. The processor
+        must skip such phantom calls so they don't burn nonces on queued
+        transactions.
+        """
+        tx_processor = self.tx_processor
+        owner = Account.create().address
+        safe_address = Account.create().address
+        master_copy = Account.create().address
+        tx_processor.process_decoded_transaction(
+            InternalTxDecodedFactory(
+                function_name="setup",
+                owner=owner,
+                threshold=1,
+                internal_tx__to=master_copy,
+                internal_tx___from=safe_address,
+                internal_tx__value=0,
+            )
+        )
+        self.assertEqual(SafeLastStatus.objects.get(address=safe_address).nonce, 0)
+
+        outer = InternalTxDecodedFactory(
+            function_name="execTransaction",
+            internal_tx___from=safe_address,
+            internal_tx__to=master_copy,
+            internal_tx__value=0,
+            internal_tx__trace_address="0",
+            internal_tx__call_type=EthereumTxCallType.DELEGATE_CALL.value,
+            internal_tx__gas_used=100_000,
+            internal_tx__error=None,
+        )
+        ethereum_tx = outer.internal_tx.ethereum_tx
+        spurious_traces = ["0,0,0,1,1,5,0", "0,0,0,3,1,5,0", "0,0,0,5,1,5,0"]
+        spurious = [
+            InternalTxDecodedFactory(
+                function_name="execTransaction",
+                internal_tx__ethereum_tx=ethereum_tx,
+                internal_tx___from=safe_address,
+                internal_tx__to=master_copy,
+                internal_tx__value=0,
+                internal_tx__trace_address=trace,
+                internal_tx__call_type=EthereumTxCallType.DELEGATE_CALL.value,
+                internal_tx__gas_used=1504,
+                internal_tx__error=None,
+            )
+            for trace in spurious_traces
+        ]
+
+        tx_processor.process_decoded_transactions([outer, *spurious])
+
+        # Only the outer call consumed a nonce
+        self.assertEqual(SafeLastStatus.objects.get(address=safe_address).nonce, 1)
+        # Only one MultisigTransaction was created
+        self.assertEqual(MultisigTransaction.objects.filter(safe=safe_address).count(), 1)
+        # Spurious InternalTx rows are flagged so a future reindex won't redecode
+        for s in spurious:
+            self.assertEqual(
+                InternalTx.objects.get(pk=s.internal_tx_id).error,
+                "false_match_skipped",
+            )
+        # Outer trace untouched
+        self.assertIsNone(InternalTx.objects.get(pk=outer.internal_tx_id).error)
+
+    def test_phantom_guard_disabled_when_threshold_zero(self):
+        """
+        When `ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD=0` the guard is a no-op
+        and the legacy (buggy) behaviour is preserved.
+        """
+        from django.test import override_settings
+
+        tx_processor = self.tx_processor
+        owner = Account.create().address
+        safe_address = Account.create().address
+        master_copy = Account.create().address
+        tx_processor.process_decoded_transaction(
+            InternalTxDecodedFactory(
+                function_name="setup",
+                owner=owner,
+                threshold=1,
+                internal_tx__to=master_copy,
+                internal_tx___from=safe_address,
+                internal_tx__value=0,
+            )
+        )
+        outer = InternalTxDecodedFactory(
+            function_name="execTransaction",
+            internal_tx___from=safe_address,
+            internal_tx__to=master_copy,
+            internal_tx__value=0,
+            internal_tx__trace_address="0",
+            internal_tx__call_type=EthereumTxCallType.DELEGATE_CALL.value,
+            internal_tx__gas_used=100_000,
+        )
+        ethereum_tx = outer.internal_tx.ethereum_tx
+        nested = InternalTxDecodedFactory(
+            function_name="execTransaction",
+            internal_tx__ethereum_tx=ethereum_tx,
+            internal_tx___from=safe_address,
+            internal_tx__to=master_copy,
+            internal_tx__value=0,
+            internal_tx__trace_address="0,0,0,1,1,5,0",
+            internal_tx__call_type=EthereumTxCallType.DELEGATE_CALL.value,
+            internal_tx__gas_used=1504,
+        )
+        with override_settings(ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD=0):
+            tx_processor.process_decoded_transactions([outer, nested])
+        # Without the guard the spurious row consumes a nonce (legacy bug)
+        self.assertEqual(SafeLastStatus.objects.get(address=safe_address).nonce, 2)

@@ -34,6 +34,7 @@ from safe_transaction_service.safe_messages import models as safe_message_models
 
 from ..models import (
     EthereumTx,
+    EthereumTxCallType,
     InternalTx,
     InternalTxDecoded,
     ModuleTransaction,
@@ -235,6 +236,44 @@ class SafeTxProcessor(TxProcessor):
         :return: Safe version for master copy address
         """
         return SafeMasterCopy.objects.get_version_for_address(master_copy)
+
+    def is_phantom_nested_exec_transaction(self, internal_tx: InternalTx) -> bool:
+        """
+        Detect a phantom nested ``execTransaction`` reverted at signature verification
+        but reported as ``error=None`` by chains with broken trace error reporting
+        (e.g. Rootstock). The Safe contract's nonce++ inside the inner call is
+        reverted along with the inner failure, so these calls cannot consume real
+        nonces — the indexer must skip them or it will burn nonces on the Safe's
+        queued transactions.
+
+        Discriminator: a genuine ``execTransaction`` always consumes well above
+        ``settings.ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD`` (nonce SSTORE
+        ~5K-22K + ECDSA recover ~3K + event emit ~2K + final call). A revert at
+        the signature check stops before any storage write and consumes ~1500
+        gas. We additionally require that this trace is nested inside another
+        ``execTransaction`` by the same Safe in the same ethereum_tx; on chains
+        with proper trace error reporting that ancestor never reaches the DB
+        (``filter_out_errored_traces`` drops it), so this guard is a no-op there.
+        """
+        from django.conf import settings
+
+        threshold = getattr(
+            settings, "ETH_INTERNAL_PHANTOM_EXEC_TX_GAS_THRESHOLD", 5000
+        )
+        if threshold <= 0 or internal_tx.gas_used >= threshold:
+            return False
+        parts = internal_tx.trace_address.split(",") if internal_tx.trace_address else []
+        if len(parts) < 2:
+            return False
+        prefixes = [",".join(parts[:i]) for i in range(1, len(parts))]
+        return InternalTxDecoded.objects.filter(
+            function_name="execTransaction",
+            internal_tx__ethereum_tx_id=internal_tx.ethereum_tx_id,
+            internal_tx___from=internal_tx._from,
+            internal_tx__call_type=EthereumTxCallType.DELEGATE_CALL.value,
+            internal_tx__trace_address__in=prefixes,
+            internal_tx__error=None,
+        ).exists()
 
     def get_last_safe_status_for_address(
         self, address: ChecksumAddress
@@ -728,6 +767,20 @@ class SafeTxProcessor(TxProcessor):
                     multisig_confirmation.ethereum_tx = ethereum_tx
                     multisig_confirmation.save(update_fields=["ethereum_tx"])
             elif function_name == "execTransaction":
+                if self.is_phantom_nested_exec_transaction(internal_tx):
+                    logger.warning(
+                        "[%s] Skipping phantom nested execTransaction at trace=%s "
+                        "in tx=%s (gas_used=%d): inner revert reported as success "
+                        "by trace-buggy chain",
+                        contract_address,
+                        internal_tx.trace_address,
+                        to_0x_hex_str(HexBytes(internal_tx.ethereum_tx_id)),
+                        internal_tx.gas_used,
+                    )
+                    InternalTx.objects.filter(pk=internal_tx.pk).update(
+                        error="false_match_skipped"
+                    )
+                    return True
                 logger.debug("[%s] Processing transaction execution", contract_address)
                 # Events for L2 Safes store information about nonce
                 nonce = (
